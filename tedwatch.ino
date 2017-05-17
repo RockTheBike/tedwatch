@@ -73,7 +73,7 @@ void loop() {
 void updateDisplay() {
   char buf[]="    "; // stores the number we're going to display
   //char* text;
-  sprintf(buf,"%4d",1234);//(int)(wattHours * 10));
+  sprintf(buf,"%4d",millis()/100);//(int)(wattHours * 10));
   Serial.print("buf:");
   Serial.println(buf);
   writeWattHourDisplay(buf);
@@ -104,7 +104,9 @@ void writeWattHourDisplay(char* text) {
       }
     }
   }
-  wattHourDisplay.setPixelColor((FONT_W-1)*FONT_H,fontColor); // light up the decimal point
+  wattHourDisplay.setPixelColor((FONT_W-1)*FONT_H+0,fontColor); // light up the decimal point
+  wattHourDisplay.setPixelColor((FONT_W  )*FONT_H+7,backgroundColor); // keep decimal point visible
+  wattHourDisplay.setPixelColor((FONT_W-2)*FONT_H+7,backgroundColor); // keep decimal point visible
   wattHourDisplay.show(); // send the update out to the LEDs
 }
 
