@@ -104,6 +104,7 @@ void writeWattHourDisplay(char* text) {
       }
     }
   }
+  wattHourDisplay.setPixelColor((FONT_W-1)*FONT_H,fontColor); // light up the decimal point
   wattHourDisplay.show(); // send the update out to the LEDs
 }
 
