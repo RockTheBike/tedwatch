@@ -18,10 +18,11 @@ pin 22 (3rd from last) of U1 will also be low if direction is the other way
 #define ENERGYPULSE     0.0012 // this many watt-hours have been used
 volatile float wattHours; // stores total counted energy
 float wattage = 0; // what is our present measured wattage
-unsigned long lastWattCalc = 0; // when's the last time we calculated wattage
+unsigned long lastWattCalcTime = 0; // when's the last time we calculated wattage
+unsigned long lastDisplay = 0; // when's the last time we did printDisplay
 unsigned long backupTimer = 0;
 float lastWattCalcWattHours = 0.0; // what our energy count was last time we calculated wattage
-#define WATTCALCTIME    1000 // how many milliseconds between recalculating wattage
+#define WATTCALCTIME    100 // how many milliseconds between recalculating wattage
 
 #include <EEPROM.h>
 #define WATTHOURS_EEPROM_ADDRESS 20 // long-term memory in EEPROM
@@ -41,6 +42,9 @@ uint32_t backgroundColor = Adafruit_NeoPixel::Color(0,0,1);
 Adafruit_NeoPixel wattHourDisplay = Adafruit_NeoPixel(WATTHOUR_DISPLAY_PIXELS, WATTHOUR_DISPLAY_PIN, NEO_GRB + NEO_KHZ800);
 Adafruit_NeoPixel powerStrip = Adafruit_NeoPixel(POWER_STRIP_PIXELS, POWER_STRIP_PIN, NEO_GRB + NEO_KHZ800);
 
+// scale the logarithmic displays
+#define MIN_POWER 1
+#define MAX_POWER 10000
 
 ISR(PCINT0_vect) { // fire an interrupt when PB0 changes state
   if (PINB & _BV(PB0)) wattHours += ENERGYPULSE; // this pulse means ENERGYPULSE energy was used
@@ -61,13 +65,95 @@ void setup() {
 
 void loop() {
   updateDisplay();
-  Serial.print(wattHours);
-  Serial.print("\t");
-  wattage = (wattHours - lastWattCalcWattHours) * 3600;
-  Serial.println(wattage);
-  lastWattCalcWattHours = wattHours;
-  delay(1000);
+  printDisplay();
+  updateWattage();
+  // wattage = (millis()/100)%10000; // for testing powerStrip
+  updatePowerStrip();
   storeEnergy();
+}
+
+void printDisplay() {
+  if (millis() - lastDisplay > DISPLAYRATE) {
+    Serial.print(wattHours);
+    Serial.print("\t\t\t");
+    Serial.println(wattage);
+    lastDisplay = millis();
+  }
+}
+
+void updateWattage() {
+  if (millis() - lastWattCalcTime > WATTCALCTIME) {
+    wattage = (wattHours - lastWattCalcWattHours) * 3600000 / (millis() - lastWattCalcTime);
+    lastWattCalcWattHours = wattHours;
+    lastWattCalcTime = millis();
+  }
+}
+
+void updatePowerStrip(){
+  float ledstolight;
+  ledstolight = logPowerRamp(wattage);
+  if( ledstolight > POWER_STRIP_PIXELS ) ledstolight=POWER_STRIP_PIXELS;
+  unsigned char hue = ledstolight/POWER_STRIP_PIXELS * 170.0;
+  uint32_t color = Wheel(powerStrip, hue<1?1:hue);
+  static const uint32_t dark = Adafruit_NeoPixel::Color(0,0,0);
+  doFractionalRamp(powerStrip, 0, POWER_STRIP_PIXELS, ledstolight, color, dark);
+  powerStrip.show();
+}
+
+float logPowerRamp( float p ) {
+  float l = log(p/MIN_POWER)*POWER_STRIP_PIXELS/log(MAX_POWER/MIN_POWER);
+  return l<0 ? 0 : l;
+}
+
+// Input a value 0 to 255 to get a color value. The colours transition rgb back to r.
+uint32_t Wheel(const Adafruit_NeoPixel& strip, byte WheelPos) {
+  if (WheelPos < 85) {
+    return strip.Color(255 - WheelPos * 3, WheelPos * 3, 0);
+  } else if (WheelPos < 170) {
+    WheelPos -= 85;
+    return strip.Color(0, 255 - WheelPos * 3, WheelPos * 3);
+  } else {
+    WheelPos -= 170;
+    return strip.Color(WheelPos * 3, 0, 255 - WheelPos * 3);
+  }
+}
+
+uint32_t dim(uint32_t c){  // a full RGB color
+#if ENABLE_DIMMING
+  return Adafruit_NeoPixel::Color(
+  dim( (uint8_t)( (c>>16) & 0xff ) ),
+  dim( (uint8_t)( (c>>8 ) & 0xff ) ),
+  dim( (uint8_t)( (c>>0 ) & 0xff ) ) );
+#else
+  return c;
+#endif
+}
+
+void doFractionalRamp(const Adafruit_NeoPixel& strip, uint8_t offset, uint8_t num_pixels, float ledstolight, uint32_t firstColor, uint32_t secondColor){
+  for( int i=0,pixel=offset; i<=num_pixels; i++,pixel++ ){
+    uint32_t color;
+    if( i<(int)ledstolight )  // definitely firstColor
+        color = firstColor;
+    else if( i>(int)ledstolight )  // definitely secondColor
+        color = secondColor;
+    else  // mix the two proportionally
+        color = weighted_average_of_colors( firstColor, secondColor, ledstolight-(int)ledstolight);
+    strip.setPixelColor(pixel, dim(color));
+  }
+}
+
+uint32_t weighted_average_of_colors( uint32_t colorA, uint32_t colorB, float fraction ){
+  // TODO:  weight brightness to look more linear to the human eye
+  uint8_t RA = (colorA>>16) & 0xff;
+  uint8_t GA = (colorA>>8 ) & 0xff;
+  uint8_t BA = (colorA>>0 ) & 0xff;
+  uint8_t RB = (colorB>>16) & 0xff;
+  uint8_t GB = (colorB>>8 ) & 0xff;
+  uint8_t BB = (colorB>>0 ) & 0xff;
+  return Adafruit_NeoPixel::Color(
+    RA*fraction + RB*(1-fraction),
+    GA*fraction + GB*(1-fraction),
+    BA*fraction + BB*(1-fraction) );
 }
 
 void updateDisplay() {
@@ -122,8 +208,8 @@ void storeEnergy() {
 }
 
 union float_and_byte {
-	float f;
-	unsigned char bs[sizeof(float)];
+  float f;
+  unsigned char bs[sizeof(float)];
 } fab;
 
 void store_watthours() {
