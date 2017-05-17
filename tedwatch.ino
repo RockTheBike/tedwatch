@@ -36,8 +36,8 @@ float lastWattCalcWattHours = 0.0; // what our energy count was last time we cal
 #define ENERGYPULSE_PIN         8 // pin 8 = PB0 aka PCINT0_vect
 #include <Adafruit_NeoPixel.h>
 #include "font1.h"
-uint32_t fontColor = Adafruit_NeoPixel::Color(25,25,25);//255,255,100);
-uint32_t backgroundColor = Adafruit_NeoPixel::Color(0,0,0);//5);
+uint32_t fontColor = Adafruit_NeoPixel::Color(64,64,25);
+uint32_t backgroundColor = Adafruit_NeoPixel::Color(0,0,1);
 Adafruit_NeoPixel wattHourDisplay = Adafruit_NeoPixel(WATTHOUR_DISPLAY_PIXELS, WATTHOUR_DISPLAY_PIN, NEO_GRB + NEO_KHZ800);
 Adafruit_NeoPixel powerStrip = Adafruit_NeoPixel(POWER_STRIP_PIXELS, POWER_STRIP_PIN, NEO_GRB + NEO_KHZ800);
 
@@ -72,10 +72,8 @@ void loop() {
 
 void updateDisplay() {
   char buf[]="    "; // stores the number we're going to display
-  //char* text;
-  sprintf(buf,"%4d",millis()/100);//(int)(wattHours * 10));
-  Serial.print("buf:");
-  Serial.println(buf);
+  //sprintf(buf,"%4d",millis()/100);// for testing display
+  sprintf(buf,"%4d",(int)(wattHours / 100));
   writeWattHourDisplay(buf);
 }
 
