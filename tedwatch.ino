@@ -159,7 +159,7 @@ uint32_t weighted_average_of_colors( uint32_t colorA, uint32_t colorB, float fra
 void updateDisplay() {
   char buf[]="    "; // stores the number we're going to display
   //sprintf(buf,"%4d",millis()/100);// for testing display
-  sprintf(buf,"%4d",(int)(wattHours / 100));
+  sprintf(buf,"%4d",(int)(wattHours / 10)); // this should be 100 but it was clearly wrong, who knows why
   writeWattHourDisplay(buf);
 }
 
