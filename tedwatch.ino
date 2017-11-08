@@ -83,7 +83,7 @@ void printDisplay() {
 
 void updateWattage() {
   if (millis() - lastWattCalcTime > WATTCALCTIME) {
-    wattage = (wattHours - lastWattCalcWattHours) * 3600000 / (millis() - lastWattCalcTime);
+    wattage = (wattHours - lastWattCalcWattHours) * 3600000 / (millis() - lastWattCalcTime) * 0.36; // 900 watts was reading as 2500 watts so ENERGYPULSE was changed to be 0.36 * 0.0012
     lastWattCalcWattHours = wattHours;
     lastWattCalcTime = millis();
   }
