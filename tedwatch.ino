@@ -44,7 +44,7 @@ Adafruit_NeoPixel powerStrip = Adafruit_NeoPixel(POWER_STRIP_PIXELS, POWER_STRIP
 
 // scale the logarithmic displays
 #define MIN_POWER 1
-#define MAX_POWER 10000
+#define MAX_POWER 50000
 
 ISR(PCINT0_vect) { // fire an interrupt when PB0 changes state
   if (PINB & _BV(PB0)) wattHours += ENERGYPULSE; // this pulse means ENERGYPULSE energy was used
