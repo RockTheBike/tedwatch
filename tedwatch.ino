@@ -13,10 +13,11 @@ pin 22 (3rd from last) of U1 will also be low if direction is the other way
 #define VERSIONSTR "giant whatwatt display with YTD watt-hour numeric display"
 #define BAUDRATE 57600
 
-#define DISPLAYRATE 1000 // how many milliseconds to show each text display before switching
+#define DISPLAYRATE 476 // CLOCK IS 1/2.77 SPEED I THINK how many milliseconds to show each text display before switching
 
-#define ENERGYPULSE     0.0012 // this many watt-hours have been used
-volatile float wattHours; // stores total counted energy
+#define ENERGYPULSE     0.000705 // this many watt-hours have been used per count
+volatile unsigned long watthour_counter; // stores total count pulses
+float wattHours = 0; // stores total calculated counted energy
 float wattage = 0; // what is our present measured wattage
 unsigned long lastWattCalcTime = 0; // when's the last time we calculated wattage
 unsigned long lastDisplay = 0; // when's the last time we did printDisplay
@@ -25,7 +26,7 @@ float lastWattCalcWattHours = 0.0; // what our energy count was last time we cal
 #define WATTCALCTIME    100 // how many milliseconds between recalculating wattage
 
 #include <EEPROM.h>
-#define WATTHOURS_EEPROM_ADDRESS 20 // long-term memory in EEPROM
+#define WATTHOUR_COUNTER_EEPROM_ADDRESS 20 // long-term memory in EEPROM
 #define BACKUP_INTERVAL 30000 // how often to write our energy to the EEPROM
 #define WATTHOUR_RESET_PIN      6
 #define POWER_STRIP_PIN         7
@@ -47,14 +48,15 @@ Adafruit_NeoPixel powerStrip = Adafruit_NeoPixel(POWER_STRIP_PIXELS, POWER_STRIP
 #define MAX_POWER 50000
 
 ISR(PCINT0_vect) { // fire an interrupt when PB0 changes state
-  if (PINB & _BV(PB0)) wattHours += ENERGYPULSE; // this pulse means ENERGYPULSE energy was used
+  if (PINB & _BV(PB0)) watthour_counter++; // this pulse means ENERGYPULSE energy was used
 }
 
 void setup() {
   Serial.begin(BAUDRATE);
   Serial.println(VERSIONSTR);
   digitalWrite( WATTHOUR_RESET_PIN, HIGH );  // we want to read with pullup enabled
-  load_watthours(); // read wattHours from EEPROM
+  load_watthour_counter(); // read watthour_counter from EEPROM
+  watthour_counter = 36619234; // HACK
   PCICR |= _BV(PCIE0); //  Pin Change Interrupt enable on PCINT0
   PCMSK0 |= _BV(PCINT0); // enable PCINT0 for PB0
   wattHourDisplay.begin();
@@ -64,6 +66,7 @@ void setup() {
 }
 
 void loop() {
+  wattHours = watthour_counter * ENERGYPULSE;
   updateDisplay();
   printDisplay();
   updateWattage();
@@ -83,7 +86,7 @@ void printDisplay() {
 
 void updateWattage() {
   if (millis() - lastWattCalcTime > WATTCALCTIME) {
-    wattage = (wattHours - lastWattCalcWattHours) * 3600000 / (millis() - lastWattCalcTime) * 0.36; // 900 watts was reading as 2500 watts so ENERGYPULSE was changed to be 0.36 * 0.0012
+    wattage = (wattHours - lastWattCalcWattHours) * 3600000 / (millis() - lastWattCalcTime); // 900 watts was reading as 2500 watts so ENERGYPULSE was changed to be 0.36 * 0.0012
     lastWattCalcWattHours = wattHours;
     lastWattCalcTime = millis();
   }
@@ -196,50 +199,50 @@ void writeWattHourDisplay(char* text) {
 
 void storeEnergy() {
   if( digitalRead( WATTHOUR_RESET_PIN ) ) {  // reset switch is not resetting
-    if( millis() - backupTimer >= BACKUP_INTERVAL ) {  // store wattHours into eeprom
-      store_watthours();
+    if( millis() - backupTimer >= BACKUP_INTERVAL ) {  // store watthour_counter into eeprom
+      store_watthour_counter();
       backupTimer = millis();
     }
   } else {  // reset switch is resetting
     Serial.println("CLEAR WH COUNTER");
-    reset_watthours();
+    reset_watthour_counter();
     backupTimer = millis();
   }
 }
 
-union float_and_byte {
-  float f;
-  unsigned char bs[sizeof(float)];
-} fab;
+union ul_and_byte {
+  unsigned long ul;
+  unsigned char bs[sizeof(unsigned long)];
+} ulab;
 
-void store_watthours() {
-  Serial.println( "Storing wattHours." );
-  fab.f = wattHours;
-  for(int i=0; i<sizeof(float); i++ )
-    EEPROM.write( WATTHOURS_EEPROM_ADDRESS+i, fab.bs[i] );
+void store_watthour_counter() {
+  Serial.println( "Storing watthour_counter." );
+  ulab.ul = watthour_counter;
+  for(int i=0; i<sizeof(unsigned long); i++ )
+    EEPROM.write( WATTHOUR_COUNTER_EEPROM_ADDRESS+i, ulab.bs[i] );
 }
 
-void load_watthours() {
-  Serial.print( "Loading watthours bytes 0x" );
+void load_watthour_counter() {
+  Serial.print( "Loading watthour_counter bytes 0x" );
   bool blank = true;
-  for(int i=0; i<sizeof(float); i++ ) {
-    fab.bs[i] = EEPROM.read( WATTHOURS_EEPROM_ADDRESS+i );
-    Serial.print( fab.bs[i], HEX );
-    if( blank && fab.bs[i] != 0xff )  blank = false;
+  for(int i=0; i<sizeof(unsigned long); i++ ) {
+    ulab.bs[i] = EEPROM.read( WATTHOUR_COUNTER_EEPROM_ADDRESS+i );
+    Serial.print( ulab.bs[i], HEX );
+    if( blank && ulab.bs[i] != 0xff )  blank = false;
   }
-  wattHours = blank ? 0 : fab.f;
-  Serial.print( ", so wattHours is " );
-  Serial.print( wattHours );
+  watthour_counter = blank ? 0 : ulab.ul;
+  Serial.print( ", so watthour_counter is " );
+  Serial.print( watthour_counter );
   Serial.println( "." );
 }
 
-void reset_watthours() {
-  load_watthours();
-  if (wattHours != 0.0) {
-    Serial.println("reset_watthours(): store_watthours()");
-    wattHours = 0;
-    store_watthours();
+void reset_watthour_counter() {
+  load_watthour_counter();
+  if (watthour_counter != 0.0) {
+    Serial.println("reset_watthour_counter(): store_watthour_counter()");
+    watthour_counter = 0;
+    store_watthour_counter();
   } else {
-    Serial.println("reset_watthours(): watthours already reset!");
+    Serial.println("reset_watthour_counter(): watthour_counter already reset!");
   }
 }
