@@ -13,9 +13,9 @@ pin 22 (3rd from last) of U1 will also be low if direction is the other way
 #define VERSIONSTR "giant whatwatt display with YTD watt-hour numeric display"
 #define BAUDRATE 57600
 
-#define DISPLAYRATE 1000 // how many milliseconds to show each text display before switching
+#define DISPLAYRATE 476 // how many milliseconds to show each text display before switching
 
-#define ENERGYPULSE     0.0012 // this many watt-hours have been used
+#define ENERGYPULSE     0.000705 // this many watt-hours have been used
 volatile float wattHours; // stores total counted energy
 float wattage = 0; // what is our present measured wattage
 unsigned long lastWattCalcTime = 0; // when's the last time we calculated wattage
@@ -46,8 +46,13 @@ Adafruit_NeoPixel powerStrip = Adafruit_NeoPixel(POWER_STRIP_PIXELS, POWER_STRIP
 #define MIN_POWER 1
 #define MAX_POWER 50000
 
+volatile int pulseDivider = 0; // hack to deal with weakness of floating-points
 ISR(PCINT0_vect) { // fire an interrupt when PB0 changes state
-  if (PINB & _BV(PB0)) wattHours += ENERGYPULSE; // this pulse means ENERGYPULSE energy was used
+  if (PINB & _BV(PB0)) pulseDivider++; // this pulse means ENERGYPULSE energy was used
+  if (pulseDivider >= 10) {
+    wattHours += (ENERGYPULSE * 10.0); // floats can't handle a number as small as ENERGYPULSE
+    pulseDivider = 0;
+  }
 }
 
 void setup() {
@@ -55,6 +60,7 @@ void setup() {
   Serial.println(VERSIONSTR);
   digitalWrite( WATTHOUR_RESET_PIN, HIGH );  // we want to read with pullup enabled
   load_watthours(); // read wattHours from EEPROM
+  wattHours = 25816.56; // HACK
   PCICR |= _BV(PCIE0); //  Pin Change Interrupt enable on PCINT0
   PCMSK0 |= _BV(PCINT0); // enable PCINT0 for PB0
   wattHourDisplay.begin();
@@ -83,7 +89,7 @@ void printDisplay() {
 
 void updateWattage() {
   if (millis() - lastWattCalcTime > WATTCALCTIME) {
-    wattage = (wattHours - lastWattCalcWattHours) * 3600000 / (millis() - lastWattCalcTime) * 0.36; // 900 watts was reading as 2500 watts so ENERGYPULSE was changed to be 0.36 * 0.0012
+    wattage = (wattHours - lastWattCalcWattHours) * 3600000 / (millis() - lastWattCalcTime); // 900 watts was reading as 2500 watts so ENERGYPULSE was changed to be 0.36 * 0.0012
     lastWattCalcWattHours = wattHours;
     lastWattCalcTime = millis();
   }
