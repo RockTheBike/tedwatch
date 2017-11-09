@@ -83,7 +83,7 @@ void printDisplay() {
 
 void updateWattage() {
   if (millis() - lastWattCalcTime > WATTCALCTIME) {
-    wattage = (wattHours - lastWattCalcWattHours) * 3600000 / (millis() - lastWattCalcTime) * 0.36; // 900 watts was reading as 2500 watts so ENERGYPULSE was changed to be 0.36 * 0.0012
+    wattage = (wattHours - lastWattCalcWattHours) * 3600000 / (millis() - lastWattCalcTime) * 0.3417; // empirically adjusted value, who knows wtf is wrong
     lastWattCalcWattHours = wattHours;
     lastWattCalcTime = millis();
   }
@@ -159,7 +159,7 @@ uint32_t weighted_average_of_colors( uint32_t colorA, uint32_t colorB, float fra
 void updateDisplay() {
   char buf[]="    "; // stores the number we're going to display
   //sprintf(buf,"%4d",millis()/100);// for testing display
-  sprintf(buf,"%4d",(int)(wattHours / 10)); // this should be 100 but it was clearly wrong, who knows why
+  sprintf(buf,"%4d",(int)(wattHours / 29) + 1691); // TODO crude hack, remove the +1691 when resetting counter
   writeWattHourDisplay(buf);
 }
 
@@ -201,9 +201,9 @@ void storeEnergy() {
       backupTimer = millis();
     }
   } else {  // reset switch is resetting
-    Serial.println("CLEAR WH COUNTER");
+    Serial.println("CANNOT RESET - SEE TODO IN CODE re crude hack"); /*CLEAR WH COUNTER");
     reset_watthours();
-    backupTimer = millis();
+    backupTimer = millis(); */
   }
 }
 
